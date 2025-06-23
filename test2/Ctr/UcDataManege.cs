@@ -17,9 +17,9 @@ namespace test2.Ctr
 {
     public partial class UcDataManege : UserControl
     {
-        public List<Material> listMaterials = new List<Material>();
+        // 必须保证整个生命周期内listMaterials唯一且全流程用同一个对象
+        private readonly List<Material> listMaterials = new List<Material>();
         public MySqlConnection conn = null;
-        private List<string> _diagnosticLog; // 用于存储诊断日志
 
         public UcDataManege()
         {
@@ -85,33 +85,16 @@ namespace test2.Ctr
             tbTableName.Enabled = false;
             cbDBUpdate.Enabled = false;
 
-            listMaterials.Clear();
+            listMaterials.Clear(); // 这里始终操作同一个对象
             tbDataManege.Clear();
-            _diagnosticLog = new List<string>(); // 清空诊断日志
 
             try
             {
                 UpdateProgress(5, "开始迭代遍历模型...");
                 IterativeTraversal();
-
-                string finalMessage = $"数据提取完成，共 {listMaterials.Count} 个有效构件。";
-                UpdateProgress(100, finalMessage);
-
-                // **诊断核心**: 如果有诊断信息，则弹窗显示
-                if (_diagnosticLog.Count > 0)
-                {
-                    // 只显示前20条，避免弹窗过大
-                    string logToShow = string.Join("\n", _diagnosticLog.Take(20));
-                    MessageBox.Show("提取到 0 个构件，以下是部分构件被跳过的原因，请将此信息反馈给我：\n\n" + logToShow, "诊断信息", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-                else if (listMaterials.Count > 0)
-                {
-                    MessageBox.Show("数据提取完成！", "操作完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                else
-                {
-                    MessageBox.Show("数据提取完成，但未找到任何符合条件的构件。", "操作完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
+                UpdateProgress(100, $"数据提取完成，共 {listMaterials.Count} 个有效构件。");
+                tbDataManege.AppendText($"获取完毕，共计提取到 {listMaterials.Count} 个构件。\r\n");
+                MessageBox.Show("数据提取完成！", "操作完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -135,6 +118,7 @@ namespace test2.Ctr
         {
             if (!cbDBUpdate.Checked) return;
 
+            // 必须始终判断同一个listMaterials对象
             if (listMaterials == null || listMaterials.Count == 0)
             {
                 MessageBox.Show("没有可供保存的数据。请先“获取数据”。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -188,6 +172,7 @@ namespace test2.Ctr
                         dataSaver.SaveMaterials(listMaterials, tableName);
                     });
                     UpdateProgress(100, "所有数据已成功保存！");
+                    tbDataManege.AppendText($"保存完毕：共 {listMaterials.Count} 条数据存入表 {tableName}。\r\n");
                     MessageBox.Show($"数据成功保存到表 '{tableName}' 中！", "操作完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
@@ -240,7 +225,7 @@ namespace test2.Ctr
                 }
                 else
                 {
-                    getDatas(item);
+                    getDatas(item); // 始终操作this.listMaterials
                 }
 
                 if (processedCount % 500 == 0)
@@ -262,9 +247,13 @@ namespace test2.Ctr
 
             progressBar.Value = Math.Min(100, percentage);
             lblProgressPercentage.Text = $"{Math.Min(100, percentage)}%";
-            if (message != null && !string.IsNullOrEmpty(message))
+            if (!string.IsNullOrEmpty(message))
             {
-                tbDataManege.AppendText(message + Environment.NewLine);
+                tbDataManege.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}\r\n");
+            }
+            else
+            {
+                tbDataManege.AppendText($"[{DateTime.Now:HH:mm:ss}] 进度: {percentage}%\r\n");
             }
         }
 
@@ -272,29 +261,16 @@ namespace test2.Ctr
 
         #region 辅助方法
 
-        // **诊断版**: 添加了诊断日志记录
         private void getDatas(ModelItem item)
         {
             var categoryElement = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "元素");
-            if (categoryElement == null)
-            {
-                _diagnosticLog.Add($"跳过'{item.DisplayName}': 未找到'元素'属性类别。");
-                return;
-            }
+            if (categoryElement == null) { return; }
 
             var propertyVolume = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "体积");
-            if (propertyVolume == null)
-            {
-                _diagnosticLog.Add($"跳过'{item.DisplayName}': 在'元素'类别中未找到'体积'属性。");
-                return;
-            }
+            if (propertyVolume == null) { return; }
 
             var propertyArea = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "面积");
-            if (propertyArea == null)
-            {
-                _diagnosticLog.Add($"跳过'{item.DisplayName}': 在'元素'类别中未找到'面积'属性。");
-                return;
-            }
+            if (propertyArea == null) { return; }
 
             var volume = GetPropertyValue(propertyVolume);
             var area = GetPropertyValue(propertyArea);
@@ -308,17 +284,31 @@ namespace test2.Ctr
             var propertyId = categoryElement.Properties.FindPropertyByDisplayName("Id");
             var id = GetPropertyValue(propertyId);
 
-            var material = new Material
+            Material material = new Material
             {
                 Name = name,
-                ID = id ?? DBNull.Value,
-                Volume = volume ?? DBNull.Value,
-                Area = area ?? DBNull.Value,
-                File = file ?? DBNull.Value,
-                Layer = layer ?? DBNull.Value
+                ID = id,
+                Volume = volume,
+                Area = area,
+                File = file,
+                Layer = layer
             };
 
+            // 保证只操作唯一listMaterials
             listMaterials.Add(material);
+
+            // 每获取一个都立即在文本框中输出
+            if (tbDataManege.InvokeRequired)
+            {
+                tbDataManege.Invoke(new Action(() =>
+                {
+                    tbDataManege.AppendText($"获取到构件: 名称={name}, ID={id}, 面积={area}, 体积={volume}, 层={layer}, 文件={file}\r\n");
+                }));
+            }
+            else
+            {
+                tbDataManege.AppendText($"获取到构件: 名称={name}, ID={id}, 面积={area}, 体积={volume}, 层={layer}, 文件={file}\r\n");
+            }
         }
 
         public void CloseDatabase()
@@ -340,6 +330,7 @@ namespace test2.Ctr
         #endregion
     }
 
+    // 其余数据模型和MySqlDataSaver不变
     #region 数据模型与数据库操作类
 
     public class Material
