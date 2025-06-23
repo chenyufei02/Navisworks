@@ -13,6 +13,15 @@ using Autodesk.Navisworks.Api;
 using MySql.Data.MySqlClient;
 using static test2.Ctr.UcProperties;
 
+// 2025.06.24  01:48  v1.5稳定版
+// 新增：
+// 1.提高提取数据速度从5分钟级到10-20秒
+// 2.增加数据表名称输入框，用户可自定义要保存的数据表，数据表存在时，用户可选择一键清空该表并保存数据
+// 3.增加进度显示与文本框提示
+// 4.采用MySqlBulkLoader配合临时表批量导入数据，保存数据到数据库速度从5分钟级到1秒
+// 5.增加自增主键P_ID，提升数据库查找速度
+// 6.增加提示信息，避免用户误操作
+
 namespace test2.Ctr
 {
     public partial class UcDataManege : UserControl
