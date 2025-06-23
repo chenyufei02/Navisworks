@@ -17,6 +17,7 @@ using System.Runtime.InteropServices;
 using System.Diagnostics;
 
 // 开发版v1.0
+// 0623 21.21
 
 namespace test2.Ctr
 {
