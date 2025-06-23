@@ -1,479 +1,396 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.ComponentModel;
 using System.Data;
-using System.Drawing;
-using System.Drawing.Text;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Autodesk.Navisworks.Api;
 using MySql.Data.MySqlClient;
 using static test2.Ctr.UcProperties;
-using test2.Ctr;
-using System.Runtime.InteropServices;
-using System.Diagnostics;
-
-// 开发版v1.0
-// 0623 21.21
 
 namespace test2.Ctr
 {
-
     public partial class UcDataManege : UserControl
     {
         public List<Material> listMaterials = new List<Material>();
-
-        // 数据库连接对象
         public MySqlConnection conn = null;
+
+        public class ProgressReport
+        {
+            public int Percentage { get; set; }
+            public string StatusMessage { get; set; }
+        }
+
+        public UcDataManege()
+        {
+            InitializeComponent();
+            SetControlsEnabled(false);
+            cbDBUpdate.Visible = false;
+        }
+
         protected override void OnParentChanged(EventArgs e)
         {
             base.OnParentChanged(e);
             Dock = DockStyle.Fill;
         }
 
-        // Windows API 函数声明
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        public static extern IntPtr FindWindow(IntPtr lpClassName, string lpWindowName);
+        #region UI 事件处理
 
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool SetForegroundWindow(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool BringWindowToTop(IntPtr hWnd);
-
-
-        public UcDataManege()
-        {
-            InitializeComponent();
-            cbDataGet.Enabled = false;
-            cbDBUpdate.Enabled = false;
-            cbModelUpdate.Enabled = false;
-            btBreakConnect.Enabled = false;
-        }
-
-        private void Bianli(ModelItem Item)
-        {
-            if (!Item.Children.Any())  // 如果没有子元素了（表示已经是有数据的最小构件），就获取数据
-            {
-                getDatas(Item);
-            }
-            else
-            {
-                foreach (var item in Item.Children)
-                {
-                    Bianli(item);
-                }
-            }
-        }
-
-
-        private int count = 0;
-        private void getDatas(ModelItem item)
-        {
-            // 如果没有元素属性，则返回
-            var categoryElement = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "元素");
-            if (categoryElement == null) { return; }
-            // 如果没有体积属性，则返回
-            var PropertyVolume = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "体积");
-            if (PropertyVolume == null) { return; }
-            // 如果没有面积属性，则返回
-            var PropertyArea = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "面积");
-            if (PropertyArea == null) { return; }
-
-            // 获取体积属性的值
-            var volume = UcProperties.GetPropertyValue(PropertyVolume);
-            // 获取面积值
-            var area = UcProperties.GetPropertyValue(PropertyArea);
-            // 获取名称
-            var name = item.DisplayName;
-            var categoryItem = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "项目");
-            // 获取源文件值
-            var PropertyFile = categoryItem.Properties.FindPropertyByDisplayName("源文件");
-            var file = UcProperties.GetPropertyValue(PropertyFile);
-            // 获取层值
-            var PropertyLayer = categoryItem.Properties.FindPropertyByDisplayName("层");
-            var layer = UcProperties.GetPropertyValue(PropertyLayer);
-            // 获取ID值
-            var PropertyId = categoryElement.Properties.FindPropertyByDisplayName("Id");
-            var id = UcProperties.GetPropertyValue(PropertyId);
-
-            Material material = new Material
-            {
-                Name = name,
-                ID = id,
-                Volume = volume,
-                Area = area,
-                File = file,
-                Layer = layer
-            };
-            UpdateMaterialList(material);
-        }
-
-        private void UpdateMaterialList(Material newMaterial)
-        {
-            listMaterials.Add(newMaterial);
-            count =listMaterials.Count;
-            tbDataManege.Text = "已获取构件数：  " + count.ToString() + "  个";
-        }
-
-
-        // 连接数据库
         private void btConnect_MouseUp(object sender, MouseEventArgs e)
         {
             try
             {
-                string stringConnect = "server=localhost;port =3306;user id=root;password=123456;database=ximalu;";
+                string stringConnect = "server=localhost;port=3306;user id=root;password=123456;database=ximalu;Allow User Variables=True;";
                 conn = new MySqlConnection(stringConnect);
                 conn.Open();
-                btBreakConnect.Enabled = true;
+
                 btConnect.Enabled = false;
-                cbDataGet.Enabled = true;
-                // 连接数据库以后可以让用户更新模型：
-                cbModelUpdate.Enabled = true;
+                btBreakConnect.Enabled = true;
+                SetControlsEnabled(true);
 
                 MessageBox.Show("数据库连接成功！");
             }
-            catch (MySqlException ex)
-            {
-                MessageBox.Show($"error：{ex.Message}", "", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
             catch (Exception ex)
             {
-                // 捕获其他类型的异常
-                MessageBox.Show($"error：{ex.Message}", "", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"数据库连接失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-
         }
 
-        // 断开数据库连接
         private void btBreakConnect_MouseUp(object sender, MouseEventArgs e)
         {
             CloseDatabase();
         }
-        // 封装关闭数据库连接的方法 方便后面在主插件程序被关闭时自动调用关闭数据库连接
-        public void CloseDatabase()
-        {
-            conn.Dispose();
-            btConnect.Enabled = true;
-            btBreakConnect.Enabled = false;
-            cbDataGet.Enabled = false;
-            cbDBUpdate.Enabled = false;
-            cbModelUpdate.Enabled = false;
-            MessageBox.Show("数据库连接已断开！");
-        }
 
-        private void cbDataGet_CheckedChanged(object sender, EventArgs e)
+        private async void cbDataGet_CheckedChanged(object sender, EventArgs e)
         {
+            if (!cbDataGet.Checked) return;
+
             var doc = Autodesk.Navisworks.Api.Application.ActiveDocument;
-            if (doc == null || doc.CurrentFileName == "")
+            if (doc == null || string.IsNullOrEmpty(doc.CurrentFileName))
             {
-                cbDataGet.Enabled = false;
-                MessageBox.Show("请先打开文档或保存文档！");
-                cbDataGet.Enabled = true;
+                MessageBox.Show("请先打开并保存一个Navisworks文档！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 cbDataGet.Checked = false;
                 return;
             }
-            else if (cbDataGet.Checked && cbDataGet.Enabled && Process.GetProcessesByName("Roamer").Length > 0)
+
+            string tableName = tbTableName.Text.Trim();
+            if (string.IsNullOrEmpty(tableName))
             {
-                // 每次获取数据前，先清空列表
-                listMaterials.Clear();
-
-                cbDataGet.Enabled = false;
-                cbDBUpdate.Enabled = false;
-                cbModelUpdate.Enabled = false;
-                tbDataManege.Enabled = true;
-                MessageBox.Show("获取数据中...");
-
-
-                // 确保对 Navisworks API 对象的访问在主线程中
-
-                foreach (var model in doc.Models)
-                {
-                    Bianli(model.RootItem);
-
-                    // 每处理完一个模型后，调用 DoEvents 让 UI 线程有机会处理消息，防止死锁
-                    System.Windows.Forms.Application.DoEvents();
-                }
-                MessageBox.Show("获取最新数据完成！");
-                cbDataGet.Enabled = true;
+                MessageBox.Show("请输入要保存的数据表名称！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 cbDataGet.Checked = false;
-                cbModelUpdate.Enabled = true;
-                // 获取数据后可以让用户更新数据库：
-                cbDBUpdate.Enabled = true;
-
-            }
-        } 
-
-
-        // 和数据库更新数据
-        private void cbDBUpdate_CheckedChanged(object sender, EventArgs e)
-        {
-            if (cbDBUpdate.Checked && cbDBUpdate.Enabled && Process.GetProcessesByName("Roamer").Length > 0)
-            {
-                cbDataGet.Enabled = false;  // 更新数据库时禁用获取数据
-                cbDBUpdate.Enabled = false;
-                cbModelUpdate.Enabled = false;
-                btBreakConnect.Enabled = false;  // 更新数据库时禁用断开数据库连接
-                SaveData(listMaterials);
-                btBreakConnect.Enabled = true;  // 更新数据库完成后启用断开数据库连接
-                cbDBUpdate.Enabled = true;
-                cbModelUpdate.Enabled = true;
-                cbDBUpdate.Checked = false;
-                cbDataGet.Enabled = true;
-                MessageBox.Show("数据已更新！");
-            }
-        }
-
-        // 保存数据到数据库
-        private void SaveData(List<Material> listMaterials)
-        {
-            if (conn == null || conn.State != ConnectionState.Open)
-            {
-                MessageBox.Show("请先连接到数据库！");
                 return;
             }
-            MySqlDataSaver dataSaver = new MySqlDataSaver(conn);
-            dataSaver.SaveMaterials(listMaterials);
-        }
 
-    }
-
-    public class MySqlDataSaver
-    {
-        private string tableName1 = "Data8";
-
-        private MySqlConnection conn;
-
-        public MySqlDataSaver(MySqlConnection conn)
-        {
-            this.conn = conn;
-        }
-
-        // 保存或更新数据
-        public void SaveMaterials(List<Material> listMaterials)
-        {
-            CreateTableIfNotExists();  // 确保表格存在
-
-            HashSet<string> existingIds = GetExistingIdsFromDatabase();  // 获取已有ID集合
-            HashSet<string> existingAreas = GetExistingAreasFromDatabase();  // 获取已有Area集合
-
-            foreach (var material in listMaterials)
+            bool shouldProceed = false;
+            try
             {
-                if (existingIds.Contains((string)material.ID))
+                var dataSaver = new MySqlDataSaver(conn);
+                if (dataSaver.CheckTableExists(tableName))
                 {
-                    if (existingAreas.Contains((string)material.Area))
+                    var result = MessageBox.Show($"数据表 '{tableName}' 已存在。\n\n是否要清空该表并用当前模型的数据完全覆盖它？", "确认操作", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    if (result == DialogResult.Yes)
                     {
-                        UpdateMaterial(material); // 如果ID存在，更新
-                        // 每处理完一个模型后，调用 DoEvents 让 UI 线程有机会处理消息，防止死锁
-                        System.Windows.Forms.Application.DoEvents();
+                        shouldProceed = true;
+                    }
+                    else
+                    {
+                        cbDataGet.Checked = false;
+                        return;
                     }
                 }
                 else
                 {
-                    InsertMaterial(material); // 如果ID不存在，插入
-                    // 每处理完一个模型后，调用 DoEvents 让 UI 线程有机会处理消息，防止死锁
-                    System.Windows.Forms.Application.DoEvents();
+                    shouldProceed = true;
                 }
-            }
-        }
-
-        private HashSet<string> GetExistingIdsFromDatabase()
-        {
-            HashSet<string> existingIds = new HashSet<string>();
-            string query = $"SELECT ID,Area FROM {tableName1}";
-            MySqlCommand cmd = new MySqlCommand(query, conn);
-            MySqlDataReader reader = cmd.ExecuteReader();
-            while (reader.Read())
-            {
-                existingIds.Add(reader["ID"].ToString());
-            }
-
-            reader.Close();
-            return existingIds;
-        }
-
-        private HashSet<string> GetExistingAreasFromDatabase()
-        {
-            HashSet<string> existingAreas = new HashSet<string>();
-            string query = $"SELECT ID,Area FROM {tableName1}";
-            MySqlCommand cmd = new MySqlCommand(query, conn);
-            MySqlDataReader reader = cmd.ExecuteReader();
-            while (reader.Read())
-            {
-                existingAreas.Add(reader["Area"].ToString());
-            }
-
-            reader.Close();
-            return existingAreas;
-        }
-
-        // 检查表格是否存在，如果不存在则创建；如果存在则检查并添加缺失的列
-
-        private void CreateTableIfNotExists()
-        {
-            string createTableQuery = $@"
-            CREATE TABLE IF NOT EXISTS {tableName1} (
-                " + GetColumnsDefinition() + @"
-            );
-        ";
-
-            try
-            {
-                MySqlCommand cmd = new MySqlCommand(createTableQuery, conn);
-                cmd.ExecuteNonQuery();
-
-                // 检查并添加缺失的列
-                CheckAndAddMissingColumns();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error creating table: {ex.Message}");
-            }
-        }
-
-        // 获取列定义
-        private string GetColumnsDefinition()
-        {
-            var properties = typeof(Material).GetProperties();
-            var columns = new List<string>();
-
-            foreach (var prop in properties)
-            {
-                string columnType = GetColumnType(prop.Name);
-                string columnDefinition = $"{prop.Name} {columnType}";
-                columns.Add(columnDefinition);
+                MessageBox.Show($"检查数据表时出错: {ex.Message}", "数据库错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                cbDataGet.Checked = false;
+                return;
             }
 
-            return string.Join(", ", columns);
-        }
-
-        // 检查并添加缺失的列
-        private void CheckAndAddMissingColumns()
-        {
-            var properties = typeof(Material).GetProperties();
-
-            foreach (var prop in properties)
+            if (shouldProceed)
             {
-                if (!ColumnExists(prop.Name))
+                SetControlsEnabled(false);
+                listMaterials.Clear();
+                tbDataManege.Clear();
+
+                var progress = new Progress<ProgressReport>(report =>
                 {
-                    AddColumn(prop.Name);
-                }
-            }
-        }
+                    progressBar.Value = report.Percentage;
+                    lblProgressPercentage.Text = $"{report.Percentage}%";
+                    if (!string.IsNullOrEmpty(report.StatusMessage))
+                        tbDataManege.AppendText(report.StatusMessage + Environment.NewLine);
+                });
 
-        // 检查列是否存在
-        private bool ColumnExists(string columnName)
-        {
-            string query = $"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_NAME = '{tableName1}' AND COLUMN_NAME = '{columnName}'";
-
-            try
-            {
-                MySqlCommand cmd = new MySqlCommand(query, conn);
-                long count = Convert.ToInt64(cmd.ExecuteScalar());
-
-                return count > 0;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error checking if column exists: {ex.Message}");
-                return false;
-            }
-        }
-
-        // 添加缺失的列
-        private void AddColumn(string columnName)
-        {
-            string columnType = GetColumnType(columnName);
-            string query = $"ALTER TABLE {tableName1} ADD COLUMN {columnName} {columnType}";
-
-            try
-            {
-                MySqlCommand cmd = new MySqlCommand(query, conn);
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error adding column: {ex.Message}");
-            }
-        }
-
-        // 根据列名获取列类型
-        private string GetColumnType(string columnName)
-        {
-            var prop = typeof(Material).GetProperty(columnName);
-            if (prop.PropertyType == typeof(decimal) || prop.PropertyType == typeof(double) || prop.PropertyType == typeof(float))
-            {
-                return "DECIMAL(18, 2)";
-            }
-            return "VARCHAR(255)";
-        }
-
-
-        // 插入新的 Material 数据
-        private void InsertMaterial(Material material)
-        {
-            var properties = typeof(Material).GetProperties();
-            var columns = string.Join(", ", properties.Select(p => p.Name));
-            var values = string.Join(", ", properties.Select(p => $"@{p.Name}"));
-
-            string query = $"INSERT INTO {tableName1} ({columns}) VALUES ({values});";
-
-            try
-            {
-                MySqlCommand cmd = new MySqlCommand(query, conn);
-                foreach (var prop in properties)
+                try
                 {
-                    cmd.Parameters.AddWithValue($"@{prop.Name}", prop.GetValue(material));
+                    await Task.Run(() => ProcessDataInBackground(doc, tableName, progress));
+                    MessageBox.Show($"数据成功保存到表 '{tableName}' 中！", "操作完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error inserting data: {ex.Message}");
-            }
-        }
-
-        // 更新已有的 Material 数据
-        private void UpdateMaterial(Material material)
-        {
-            var properties = typeof(Material).GetProperties();
-            // 排除 ID 属性（只设置了ID重置？）
-            var setClause = string.Join(", ", properties.Where(p => p.Name != "ID").Select(p => $"{p.Name} = @{p.Name}"));
-
-            string query = $"UPDATE {tableName1} SET {setClause} WHERE ID = @ID;";
-
-            try
-            {
-                MySqlCommand cmd = new MySqlCommand(query, conn);
-                foreach (var prop in properties)
+                catch (Exception ex)
                 {
-                    cmd.Parameters.AddWithValue($"@{prop.Name}", prop.GetValue(material));
+                    MessageBox.Show($"处理过程中发生严重错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
-                cmd.ExecuteNonQuery();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Error updating data: {ex.Message}");
+                finally
+                {
+                    SetControlsEnabled(true);
+                    cbDataGet.Checked = false;
+                    progressBar.Value = 0;
+                    lblProgressPercentage.Text = "0%";
+                }
             }
         }
+
+        private void cbDBUpdate_CheckedChanged(object sender, EventArgs e)
+        {
+            if (cbDBUpdate.Checked)
+            {
+                MessageBox.Show("此功能已集成到“获取数据”中。请勾选“获取数据”并按提示操作。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                cbDBUpdate.Checked = false;
+            }
+        }
+
+        #endregion
+
+        #region 核心逻辑 (后台任务)
+
+        private void ProcessDataInBackground(Document doc, string tableName, IProgress<ProgressReport> progress)
+        {
+            progress.Report(new ProgressReport { Percentage = 5, StatusMessage = "开始迭代遍历模型..." });
+
+            // **优化**: 使用迭代法替代递归，进行全模型遍历
+            IterativeTraversal(doc.Models.Select(m => m.RootItem), progress);
+
+            progress.Report(new ProgressReport { Percentage = 80, StatusMessage = $"遍历和提取完成，共 {listMaterials.Count} 个有效构件。" });
+            progress.Report(new ProgressReport { Percentage = 85, StatusMessage = "准备将数据批量保存到数据库..." });
+
+            MySqlDataSaver dataSaver = new MySqlDataSaver(conn);
+            dataSaver.SaveMaterials(listMaterials, tableName);
+
+            progress.Report(new ProgressReport { Percentage = 100, StatusMessage = "所有数据已成功保存！" });
+        }
+
+        // **新方法**: 使用栈的迭代式深度优先遍历
+        private void IterativeTraversal(IEnumerable<ModelItem> rootItems, IProgress<ProgressReport> progress)
+        {
+            Stack<ModelItem> stack = new Stack<ModelItem>(rootItems);
+            int processedCount = 0;
+
+            while (stack.Count > 0)
+            {
+                ModelItem item = stack.Pop();
+                processedCount++;
+
+                // 如果有子节点，将子节点压入栈中继续遍历
+                if (item.Children.Any())
+                {
+                    foreach (var child in item.Children)
+                    {
+                        stack.Push(child);
+                    }
+                }
+                // 如果没有子节点，则认为是叶节点，提取数据
+                else
+                {
+                    getDatas(item);
+                }
+
+                // 更新进度条 (基于已处理的节点数，这是一个估算值)
+                if (processedCount % 500 == 0)
+                {
+                    int percentage = 5 + (int)((double)processedCount / (processedCount + 20000) * 75);
+                    progress.Report(new ProgressReport { Percentage = Math.Min(percentage, 79), StatusMessage = "" });
+                }
+            }
+        }
+
+        #endregion
+
+        #region 辅助方法
+
+        private void getDatas(ModelItem item)
+        {
+            var categoryElement = item.PropertyCategories.FindCategoryByDisplayName("元素");
+            if (categoryElement == null) return;
+
+            var categoryItem = item.PropertyCategories.FindCategoryByDisplayName("项目");
+            if (categoryItem == null) return;
+
+            var propertyId = categoryElement.Properties.FindPropertyByDisplayName("Id");
+            if (propertyId == null) return;
+
+            var propertyVolume = categoryElement.Properties.FindPropertyByDisplayName("体积");
+            var propertyArea = categoryElement.Properties.FindPropertyByDisplayName("面积");
+            var propertyFile = categoryItem.Properties.FindPropertyByDisplayName("源文件");
+            var propertyLayer = categoryItem.Properties.FindPropertyByDisplayName("层");
+
+            var material = new Material
+            {
+                ID = GetPropertyValue(propertyId) ?? DBNull.Value,
+                Name = item.DisplayName,
+                Volume = GetPropertyValue(propertyVolume) ?? DBNull.Value,
+                Area = GetPropertyValue(propertyArea) ?? DBNull.Value,
+                File = GetPropertyValue(propertyFile) ?? DBNull.Value,
+                Layer = GetPropertyValue(propertyLayer) ?? DBNull.Value
+            };
+
+            listMaterials.Add(material);
+        }
+
+        public void CloseDatabase()
+        {
+            if (conn != null && conn.State == ConnectionState.Open)
+            {
+                conn.Dispose();
+                conn = null;
+                btConnect.Enabled = true;
+                btBreakConnect.Enabled = false;
+                SetControlsEnabled(false);
+                MessageBox.Show("数据库连接已断开！");
+            }
+        }
+
+        private void SetControlsEnabled(bool isEnabled)
+        {
+            cbDataGet.Enabled = isEnabled;
+            cbModelUpdate.Enabled = isEnabled;
+            tbTableName.Enabled = isEnabled;
+            btConnect.Enabled = isEnabled && (conn == null || conn.State != ConnectionState.Open);
+            btBreakConnect.Enabled = isEnabled && (conn != null && conn.State == ConnectionState.Open);
+        }
+
+        #endregion
     }
+
+    #region 数据模型与数据库操作类
 
     public class Material
     {
+        public object ID { get; set; }
         public string Name { get; set; }
         public object Volume { get; set; }
         public object Area { get; set; }
-        public object ID { get; set; }
         public object File { get; set; }
         public object Layer { get; set; }
     }
+
+    public class MySqlDataSaver
+    {
+        private MySqlConnection conn;
+
+        public MySqlDataSaver(MySqlConnection connection)
+        {
+            this.conn = connection;
+        }
+
+        public void SaveMaterials(List<Material> materials, string tableName)
+        {
+            if (materials == null) return;
+
+            CreateTableIfNotExists(tableName);
+            TruncateTable(tableName);
+
+            if (materials.Count == 0) return;
+
+            string tempCsvFile = Path.GetTempFileName();
+            try
+            {
+                File.WriteAllText(tempCsvFile, ConvertToCsv(materials), Encoding.UTF8);
+                var bulkLoader = new MySqlBulkLoader(conn)
+                {
+                    TableName = tableName,
+                    FileName = tempCsvFile,
+                    FieldTerminator = ",",
+                    LineTerminator = "\r\n",
+                    CharacterSet = "utf8",
+                    NumberOfLinesToSkip = 0,
+                };
+                bulkLoader.Load();
+            }
+            finally
+            {
+                if (File.Exists(tempCsvFile))
+                {
+                    File.Delete(tempCsvFile);
+                }
+            }
+        }
+
+        private string ConvertToCsv(List<Material> materials)
+        {
+            var sb = new StringBuilder();
+            foreach (var material in materials)
+            {
+                var values = new List<string>
+                {
+                    EscapeCsvField(material.ID),
+                    EscapeCsvField(material.Name),
+                    EscapeCsvField(material.Volume),
+                    EscapeCsvField(material.Area),
+                    EscapeCsvField(material.File),
+                    EscapeCsvField(material.Layer)
+                };
+                sb.AppendLine(string.Join(",", values));
+            }
+            return sb.ToString();
+        }
+
+        private string EscapeCsvField(object field)
+        {
+            if (field == null || field == DBNull.Value) return "";
+            string value = field.ToString();
+            if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
+            {
+                return $"\"{value.Replace("\"", "\"\"")}\"";
+            }
+            return value;
+        }
+
+        public bool CheckTableExists(string tableName)
+        {
+            string query = "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = @dbName AND table_name = @tableName";
+            using (MySqlCommand cmd = new MySqlCommand(query, conn))
+            {
+                cmd.Parameters.AddWithValue("@dbName", conn.Database);
+                cmd.Parameters.AddWithValue("@tableName", tableName);
+                return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
+            }
+        }
+
+        private void TruncateTable(string tableName)
+        {
+            string query = $"TRUNCATE TABLE `{tableName}`";
+            using (MySqlCommand cmd = new MySqlCommand(query, conn))
+            {
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private void CreateTableIfNotExists(string tableName)
+        {
+            string createTableQuery = $@"
+            CREATE TABLE IF NOT EXISTS `{tableName}` (
+                `ID` VARCHAR(255) PRIMARY KEY,
+                `Name` TEXT COLLATE utf8_general_ci,
+                `Volume` DECIMAL(18, 5),
+                `Area` DECIMAL(18, 5),
+                `File` TEXT COLLATE utf8_general_ci,
+                `Layer` TEXT COLLATE utf8_general_ci
+            );";
+
+            using (MySqlCommand cmd = new MySqlCommand(createTableQuery, conn))
+            {
+                cmd.ExecuteNonQuery();
+            }
+        }
+    }
+
+    #endregion
 }
