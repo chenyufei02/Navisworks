@@ -17,8 +17,7 @@ namespace test2.Ctr
 {
     public partial class UcDataManege : UserControl
     {
-        // 必须保证整个生命周期内listMaterials唯一且全流程用同一个对象
-        private readonly List<Material> listMaterials = new List<Material>();
+        public List<Material> listMaterials = new List<Material>();
         public MySqlConnection conn = null;
 
         public UcDataManege()
@@ -85,16 +84,16 @@ namespace test2.Ctr
             tbTableName.Enabled = false;
             cbDBUpdate.Enabled = false;
 
-            listMaterials.Clear(); // 这里始终操作同一个对象
+            listMaterials.Clear();
             tbDataManege.Clear();
 
             try
             {
-                UpdateProgress(5, "开始迭代遍历模型...");
-                IterativeTraversal();
-                UpdateProgress(100, $"数据提取完成，共 {listMaterials.Count} 个有效构件。");
-                tbDataManege.AppendText($"获取完毕，共计提取到 {listMaterials.Count} 个构件。\r\n");
-                MessageBox.Show("数据提取完成！", "操作完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                UpdateProgress(0, "开始提取数据...");
+                IterativeTraversalWithMinimalPrompt();
+                UpdateProgress(100, $"提取完成，共 {listMaterials.Count} 个有效构件。");
+                tbDataManege.AppendText($"获取完毕，总计提取到 {listMaterials.Count} 个构件。\r\n");
+                MessageBox.Show($"提取完成！一共提取了{listMaterials.Count}个构件。", "提取完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -118,7 +117,6 @@ namespace test2.Ctr
         {
             if (!cbDBUpdate.Checked) return;
 
-            // 必须始终判断同一个listMaterials对象
             if (listMaterials == null || listMaterials.Count == 0)
             {
                 MessageBox.Show("没有可供保存的数据。请先“获取数据”。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -165,7 +163,7 @@ namespace test2.Ctr
 
                 try
                 {
-                    UpdateProgress(0, "准备将数据批量保存到数据库(后台线程)...");
+                    UpdateProgress(0, "准备批量保存数据...");
                     await Task.Run(() =>
                     {
                         MySqlDataSaver dataSaver = new MySqlDataSaver(conn);
@@ -200,9 +198,9 @@ namespace test2.Ctr
 
         #endregion
 
-        #region 核心逻辑
+        #region 数据提取逻辑（只关键节点刷新提示，极致性能）
 
-        private void IterativeTraversal()
+        private void IterativeTraversalWithMinimalPrompt()
         {
             var rootItems = Autodesk.Navisworks.Api.Application.ActiveDocument.Models.Select(m => m.RootItem);
             Stack<ModelItem> stack = new Stack<ModelItem>(rootItems);
@@ -211,6 +209,8 @@ namespace test2.Ctr
             int approxTotal = rootItems.Any() ? rootItems.Sum(r => r.Descendants.Count()) : 1;
             if (approxTotal == 0) approxTotal = 10000;
 
+            UpdateProgress(0, $"开始遍历，预计总数{approxTotal}...");
+
             while (stack.Count > 0)
             {
                 ModelItem item = stack.Pop();
@@ -218,23 +218,55 @@ namespace test2.Ctr
 
                 if (item.Children.Any())
                 {
-                    foreach (var child in item.Children)
-                    {
-                        stack.Push(child);
-                    }
+                    foreach (var child in item.Children) stack.Push(child);
                 }
                 else
                 {
-                    getDatas(item); // 始终操作this.listMaterials
+                    var material = TryGetMaterial(item);
+                    if (material != null) listMaterials.Add(material);
                 }
 
-                if (processedCount % 500 == 0)
+                // 只每1万条刷新一次进度
+                if (processedCount % 10000 == 0)
                 {
-                    int percentage = 5 + (int)((double)processedCount / approxTotal * 95);
-                    UpdateProgress(Math.Min(percentage, 100), null);
+                    UpdateProgress((int)((double)processedCount / approxTotal * 100), $"已扫描{processedCount}个构件...");
                     System.Windows.Forms.Application.DoEvents();
                 }
             }
+        }
+
+        private Material TryGetMaterial(ModelItem item)
+        {
+            var categoryElement = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "元素");
+            if (categoryElement == null) return null;
+
+            var propertyVolume = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "体积");
+            if (propertyVolume == null) return null;
+
+            var propertyArea = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "面积");
+            if (propertyArea == null) return null;
+
+            var volume = GetPropertyValue(propertyVolume);
+            var area = GetPropertyValue(propertyArea);
+            var name = item.DisplayName;
+
+            var categoryItem = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "项目");
+
+            var file = (categoryItem != null) ? GetPropertyValue(categoryItem.Properties.FindPropertyByDisplayName("源文件")) : null;
+            var layer = (categoryItem != null) ? GetPropertyValue(categoryItem.Properties.FindPropertyByDisplayName("层")) : null;
+
+            var propertyId = categoryElement.Properties.FindPropertyByDisplayName("Id");
+            var id = GetPropertyValue(propertyId);
+
+            return new Material
+            {
+                Name = name,
+                ID = id,
+                Volume = volume,
+                Area = area,
+                File = file,
+                Layer = layer
+            };
         }
 
         private void UpdateProgress(int percentage, string message)
@@ -251,65 +283,11 @@ namespace test2.Ctr
             {
                 tbDataManege.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}\r\n");
             }
-            else
-            {
-                tbDataManege.AppendText($"[{DateTime.Now:HH:mm:ss}] 进度: {percentage}%\r\n");
-            }
         }
 
         #endregion
 
-        #region 辅助方法
-
-        private void getDatas(ModelItem item)
-        {
-            var categoryElement = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "元素");
-            if (categoryElement == null) { return; }
-
-            var propertyVolume = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "体积");
-            if (propertyVolume == null) { return; }
-
-            var propertyArea = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "面积");
-            if (propertyArea == null) { return; }
-
-            var volume = GetPropertyValue(propertyVolume);
-            var area = GetPropertyValue(propertyArea);
-            var name = item.DisplayName;
-
-            var categoryItem = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "项目");
-
-            var file = (categoryItem != null) ? GetPropertyValue(categoryItem.Properties.FindPropertyByDisplayName("源文件")) : null;
-            var layer = (categoryItem != null) ? GetPropertyValue(categoryItem.Properties.FindPropertyByDisplayName("层")) : null;
-
-            var propertyId = categoryElement.Properties.FindPropertyByDisplayName("Id");
-            var id = GetPropertyValue(propertyId);
-
-            Material material = new Material
-            {
-                Name = name,
-                ID = id,
-                Volume = volume,
-                Area = area,
-                File = file,
-                Layer = layer
-            };
-
-            // 保证只操作唯一listMaterials
-            listMaterials.Add(material);
-
-            // 每获取一个都立即在文本框中输出
-            if (tbDataManege.InvokeRequired)
-            {
-                tbDataManege.Invoke(new Action(() =>
-                {
-                    tbDataManege.AppendText($"获取到构件: 名称={name}, ID={id}, 面积={area}, 体积={volume}, 层={layer}, 文件={file}\r\n");
-                }));
-            }
-            else
-            {
-                tbDataManege.AppendText($"获取到构件: 名称={name}, ID={id}, 面积={area}, 体积={volume}, 层={layer}, 文件={file}\r\n");
-            }
-        }
+        #region 其它方法...
 
         public void CloseDatabase()
         {
@@ -326,13 +304,10 @@ namespace test2.Ctr
                 MessageBox.Show("数据库连接已断开！");
             }
         }
-
         #endregion
     }
 
-    // 其余数据模型和MySqlDataSaver不变
-    #region 数据模型与数据库操作类
-
+    // 保留原始结构，Material和MySqlDataSaver都在这里
     public class Material
     {
         public object ID { get; set; }
@@ -354,34 +329,54 @@ namespace test2.Ctr
 
         public void SaveMaterials(List<Material> materials, string tableName)
         {
-            if (materials == null) return;
+            if (materials == null || materials.Count == 0) return;
 
-            CreateTableIfNotExists(tableName);
-            TruncateTable(tableName);
+            // 自动检测secure_file_priv目录
+            string secureFilePriv = null;
+            using (var cmd = new MySqlCommand("SHOW VARIABLES LIKE 'secure_file_priv'", conn))
+            using (var reader = cmd.ExecuteReader())
+            {
+                if (reader.Read())
+                {
+                    secureFilePriv = reader.GetString(1);
+                }
+            }
 
-            if (materials.Count == 0) return;
+            string csvFileName = $"import_{Guid.NewGuid():N}.csv";
+            string csvFilePath = string.IsNullOrEmpty(secureFilePriv)
+                ? Path.Combine(Path.GetTempPath(), csvFileName)
+                : Path.Combine(secureFilePriv, csvFileName);
 
-            string tempCsvFile = Path.GetTempFileName();
+            File.WriteAllText(csvFilePath, ConvertToCsv(materials), Encoding.UTF8);
+
             try
             {
-                File.WriteAllText(tempCsvFile, ConvertToCsv(materials), Encoding.UTF8);
+                CreateTableIfNotExists(tableName);
+                TruncateTable(tableName);
+
+                // 用Columns只写6个业务字段，P_Id自动自增
                 var bulkLoader = new MySqlBulkLoader(conn)
                 {
                     TableName = tableName,
-                    FileName = tempCsvFile,
+                    FileName = csvFilePath,
                     FieldTerminator = ",",
                     LineTerminator = "\r\n",
                     CharacterSet = "utf8",
-                    NumberOfLinesToSkip = 0,
+                    NumberOfLinesToSkip = 0
                 };
+                bulkLoader.Columns.AddRange(new[] { "ID", "Name", "Volume", "Area", "File", "Layer" });
                 bulkLoader.Load();
+
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"批量写入数据失败：{ex.Message}", "数据库错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                throw;
             }
             finally
             {
-                if (File.Exists(tempCsvFile))
-                {
-                    File.Delete(tempCsvFile);
-                }
+                if (File.Exists(csvFilePath))
+                    File.Delete(csvFilePath);
             }
         }
 
@@ -448,13 +443,10 @@ namespace test2.Ctr
                 `Layer` TEXT COLLATE utf8_general_ci,
                 INDEX `idx_ID` (`ID`)
             );";
-
             using (MySqlCommand cmd = new MySqlCommand(createTableQuery, conn))
             {
                 cmd.ExecuteNonQuery();
             }
         }
     }
-
-    #endregion
 }
