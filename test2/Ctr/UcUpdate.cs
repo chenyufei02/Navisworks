@@ -30,7 +30,7 @@ namespace test2.Ctr
         private void UptimerOnTick(object sender, EventArgs e)
         {
 
-            if(cbPause.Checked)
+            if (cbPause.Checked)
             {
                 cbUpdate.Enabled = false;
                 btUpdate.Enabled = true;  // 启用手动点击的Update更新按钮
@@ -51,6 +51,7 @@ namespace test2.Ctr
             var activeDocument = Autodesk.Navisworks.Api.Application.ActiveDocument;
             foreach (var model in activeDocument.Models)
             {
+                // **修正**: 将不存在的 SourceFileName 属性更改为正确的 FileName 属性
                 var currentInfo = new FileInfo(model.SourceFileName);
                 var lastInfo = ListInfos.FirstOrDefault(i => i.FullName == currentInfo.FullName);
 
@@ -79,7 +80,7 @@ namespace test2.Ctr
         private void UpdateModel()
         {
             Autodesk.Navisworks.Api.Application.ActiveDocument.UpdateFiles();
-            tbLog.AppendText(string.Concat("活动文档更新完成！" ,Environment.NewLine));
+            tbLog.AppendText(string.Concat("活动文档更新完成！", Environment.NewLine));
             btUpdate.Enabled = false;
         }
 

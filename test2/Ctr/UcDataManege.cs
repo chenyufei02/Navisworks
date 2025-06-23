@@ -19,18 +19,17 @@ namespace test2.Ctr
     {
         public List<Material> listMaterials = new List<Material>();
         public MySqlConnection conn = null;
-
-        public class ProgressReport
-        {
-            public int Percentage { get; set; }
-            public string StatusMessage { get; set; }
-        }
+        private List<string> _diagnosticLog; // 用于存储诊断日志
 
         public UcDataManege()
         {
             InitializeComponent();
-            SetControlsEnabled(false);
-            cbDBUpdate.Visible = false;
+            cbDataGet.Enabled = false;
+            cbDBUpdate.Enabled = false;
+            cbModelUpdate.Enabled = false;
+            btBreakConnect.Enabled = false;
+            tbTableName.Enabled = false;
+            cbDBUpdate.Visible = true;
         }
 
         protected override void OnParentChanged(EventArgs e)
@@ -51,7 +50,9 @@ namespace test2.Ctr
 
                 btConnect.Enabled = false;
                 btBreakConnect.Enabled = true;
-                SetControlsEnabled(true);
+                cbDataGet.Enabled = true;
+                cbModelUpdate.Enabled = true;
+                tbTableName.Enabled = true;
 
                 MessageBox.Show("数据库连接成功！");
             }
@@ -66,7 +67,7 @@ namespace test2.Ctr
             CloseDatabase();
         }
 
-        private async void cbDataGet_CheckedChanged(object sender, EventArgs e)
+        private void cbDataGet_CheckedChanged(object sender, EventArgs e)
         {
             if (!cbDataGet.Checked) return;
 
@@ -78,11 +79,74 @@ namespace test2.Ctr
                 return;
             }
 
+            btBreakConnect.Enabled = false;
+            cbDataGet.Enabled = false;
+            cbModelUpdate.Enabled = false;
+            tbTableName.Enabled = false;
+            cbDBUpdate.Enabled = false;
+
+            listMaterials.Clear();
+            tbDataManege.Clear();
+            _diagnosticLog = new List<string>(); // 清空诊断日志
+
+            try
+            {
+                UpdateProgress(5, "开始迭代遍历模型...");
+                IterativeTraversal();
+
+                string finalMessage = $"数据提取完成，共 {listMaterials.Count} 个有效构件。";
+                UpdateProgress(100, finalMessage);
+
+                // **诊断核心**: 如果有诊断信息，则弹窗显示
+                if (_diagnosticLog.Count > 0)
+                {
+                    // 只显示前20条，避免弹窗过大
+                    string logToShow = string.Join("\n", _diagnosticLog.Take(20));
+                    MessageBox.Show("提取到 0 个构件，以下是部分构件被跳过的原因，请将此信息反馈给我：\n\n" + logToShow, "诊断信息", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                else if (listMaterials.Count > 0)
+                {
+                    MessageBox.Show("数据提取完成！", "操作完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show("数据提取完成，但未找到任何符合条件的构件。", "操作完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"提取数据时发生错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                btBreakConnect.Enabled = true;
+                cbDataGet.Enabled = true;
+                cbModelUpdate.Enabled = true;
+                tbTableName.Enabled = true;
+                cbDBUpdate.Enabled = true;
+
+                cbDataGet.Checked = false;
+                progressBar.Value = 0;
+                lblProgressPercentage.Text = "0%";
+            }
+        }
+
+        private async void cbDBUpdate_CheckedChanged(object sender, EventArgs e)
+        {
+            if (!cbDBUpdate.Checked) return;
+
+            if (listMaterials == null || listMaterials.Count == 0)
+            {
+                MessageBox.Show("没有可供保存的数据。请先“获取数据”。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                cbDBUpdate.Checked = false;
+                return;
+            }
+
             string tableName = tbTableName.Text.Trim();
             if (string.IsNullOrEmpty(tableName))
             {
                 MessageBox.Show("请输入要保存的数据表名称！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                cbDataGet.Checked = false;
+                cbDBUpdate.Checked = false;
                 return;
             }
 
@@ -92,16 +156,8 @@ namespace test2.Ctr
                 var dataSaver = new MySqlDataSaver(conn);
                 if (dataSaver.CheckTableExists(tableName))
                 {
-                    var result = MessageBox.Show($"数据表 '{tableName}' 已存在。\n\n是否要清空该表并用当前模型的数据完全覆盖它？", "确认操作", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-                    if (result == DialogResult.Yes)
-                    {
-                        shouldProceed = true;
-                    }
-                    else
-                    {
-                        cbDataGet.Checked = false;
-                        return;
-                    }
+                    var result = MessageBox.Show($"数据表 '{tableName}' 已存在。\n\n是否要清空该表并用新提取的数据完全覆盖它？", "确认操作", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    shouldProceed = (result == DialogResult.Yes);
                 }
                 else
                 {
@@ -111,84 +167,70 @@ namespace test2.Ctr
             catch (Exception ex)
             {
                 MessageBox.Show($"检查数据表时出错: {ex.Message}", "数据库错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                cbDataGet.Checked = false;
+                cbDBUpdate.Checked = false;
                 return;
             }
 
             if (shouldProceed)
             {
-                SetControlsEnabled(false);
-                listMaterials.Clear();
-                tbDataManege.Clear();
-
-                var progress = new Progress<ProgressReport>(report =>
-                {
-                    progressBar.Value = report.Percentage;
-                    lblProgressPercentage.Text = $"{report.Percentage}%";
-                    if (!string.IsNullOrEmpty(report.StatusMessage))
-                        tbDataManege.AppendText(report.StatusMessage + Environment.NewLine);
-                });
+                btBreakConnect.Enabled = false;
+                cbDataGet.Enabled = false;
+                cbModelUpdate.Enabled = false;
+                tbTableName.Enabled = false;
+                cbDBUpdate.Enabled = false;
 
                 try
                 {
-                    await Task.Run(() => ProcessDataInBackground(doc, tableName, progress));
+                    UpdateProgress(0, "准备将数据批量保存到数据库(后台线程)...");
+                    await Task.Run(() =>
+                    {
+                        MySqlDataSaver dataSaver = new MySqlDataSaver(conn);
+                        dataSaver.SaveMaterials(listMaterials, tableName);
+                    });
+                    UpdateProgress(100, "所有数据已成功保存！");
                     MessageBox.Show($"数据成功保存到表 '{tableName}' 中！", "操作完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"处理过程中发生严重错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show($"保存数据时发生严重错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
                 finally
                 {
-                    SetControlsEnabled(true);
-                    cbDataGet.Checked = false;
+                    btBreakConnect.Enabled = true;
+                    cbDataGet.Enabled = true;
+                    cbModelUpdate.Enabled = true;
+                    tbTableName.Enabled = true;
+                    cbDBUpdate.Enabled = true;
+
+                    cbDBUpdate.Checked = false;
                     progressBar.Value = 0;
                     lblProgressPercentage.Text = "0%";
                 }
             }
-        }
-
-        private void cbDBUpdate_CheckedChanged(object sender, EventArgs e)
-        {
-            if (cbDBUpdate.Checked)
+            else
             {
-                MessageBox.Show("此功能已集成到“获取数据”中。请勾选“获取数据”并按提示操作。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 cbDBUpdate.Checked = false;
             }
         }
 
         #endregion
 
-        #region 核心逻辑 (后台任务)
+        #region 核心逻辑
 
-        private void ProcessDataInBackground(Document doc, string tableName, IProgress<ProgressReport> progress)
+        private void IterativeTraversal()
         {
-            progress.Report(new ProgressReport { Percentage = 5, StatusMessage = "开始迭代遍历模型..." });
-
-            // **优化**: 使用迭代法替代递归，进行全模型遍历
-            IterativeTraversal(doc.Models.Select(m => m.RootItem), progress);
-
-            progress.Report(new ProgressReport { Percentage = 80, StatusMessage = $"遍历和提取完成，共 {listMaterials.Count} 个有效构件。" });
-            progress.Report(new ProgressReport { Percentage = 85, StatusMessage = "准备将数据批量保存到数据库..." });
-
-            MySqlDataSaver dataSaver = new MySqlDataSaver(conn);
-            dataSaver.SaveMaterials(listMaterials, tableName);
-
-            progress.Report(new ProgressReport { Percentage = 100, StatusMessage = "所有数据已成功保存！" });
-        }
-
-        // **新方法**: 使用栈的迭代式深度优先遍历
-        private void IterativeTraversal(IEnumerable<ModelItem> rootItems, IProgress<ProgressReport> progress)
-        {
+            var rootItems = Autodesk.Navisworks.Api.Application.ActiveDocument.Models.Select(m => m.RootItem);
             Stack<ModelItem> stack = new Stack<ModelItem>(rootItems);
             int processedCount = 0;
+
+            int approxTotal = rootItems.Any() ? rootItems.Sum(r => r.Descendants.Count()) : 1;
+            if (approxTotal == 0) approxTotal = 10000;
 
             while (stack.Count > 0)
             {
                 ModelItem item = stack.Pop();
                 processedCount++;
 
-                // 如果有子节点，将子节点压入栈中继续遍历
                 if (item.Children.Any())
                 {
                     foreach (var child in item.Children)
@@ -196,18 +238,33 @@ namespace test2.Ctr
                         stack.Push(child);
                     }
                 }
-                // 如果没有子节点，则认为是叶节点，提取数据
                 else
                 {
                     getDatas(item);
                 }
 
-                // 更新进度条 (基于已处理的节点数，这是一个估算值)
                 if (processedCount % 500 == 0)
                 {
-                    int percentage = 5 + (int)((double)processedCount / (processedCount + 20000) * 75);
-                    progress.Report(new ProgressReport { Percentage = Math.Min(percentage, 79), StatusMessage = "" });
+                    int percentage = 5 + (int)((double)processedCount / approxTotal * 95);
+                    UpdateProgress(Math.Min(percentage, 100), null);
+                    System.Windows.Forms.Application.DoEvents();
                 }
+            }
+        }
+
+        private void UpdateProgress(int percentage, string message)
+        {
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new Action(() => UpdateProgress(percentage, message)));
+                return;
+            }
+
+            progressBar.Value = Math.Min(100, percentage);
+            lblProgressPercentage.Text = $"{Math.Min(100, percentage)}%";
+            if (message != null && !string.IsNullOrEmpty(message))
+            {
+                tbDataManege.AppendText(message + Environment.NewLine);
             }
         }
 
@@ -215,30 +272,50 @@ namespace test2.Ctr
 
         #region 辅助方法
 
+        // **诊断版**: 添加了诊断日志记录
         private void getDatas(ModelItem item)
         {
-            var categoryElement = item.PropertyCategories.FindCategoryByDisplayName("元素");
-            if (categoryElement == null) return;
+            var categoryElement = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "元素");
+            if (categoryElement == null)
+            {
+                _diagnosticLog.Add($"跳过'{item.DisplayName}': 未找到'元素'属性类别。");
+                return;
+            }
 
-            var categoryItem = item.PropertyCategories.FindCategoryByDisplayName("项目");
-            if (categoryItem == null) return;
+            var propertyVolume = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "体积");
+            if (propertyVolume == null)
+            {
+                _diagnosticLog.Add($"跳过'{item.DisplayName}': 在'元素'类别中未找到'体积'属性。");
+                return;
+            }
+
+            var propertyArea = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "面积");
+            if (propertyArea == null)
+            {
+                _diagnosticLog.Add($"跳过'{item.DisplayName}': 在'元素'类别中未找到'面积'属性。");
+                return;
+            }
+
+            var volume = GetPropertyValue(propertyVolume);
+            var area = GetPropertyValue(propertyArea);
+            var name = item.DisplayName;
+
+            var categoryItem = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "项目");
+
+            var file = (categoryItem != null) ? GetPropertyValue(categoryItem.Properties.FindPropertyByDisplayName("源文件")) : null;
+            var layer = (categoryItem != null) ? GetPropertyValue(categoryItem.Properties.FindPropertyByDisplayName("层")) : null;
 
             var propertyId = categoryElement.Properties.FindPropertyByDisplayName("Id");
-            if (propertyId == null) return;
-
-            var propertyVolume = categoryElement.Properties.FindPropertyByDisplayName("体积");
-            var propertyArea = categoryElement.Properties.FindPropertyByDisplayName("面积");
-            var propertyFile = categoryItem.Properties.FindPropertyByDisplayName("源文件");
-            var propertyLayer = categoryItem.Properties.FindPropertyByDisplayName("层");
+            var id = GetPropertyValue(propertyId);
 
             var material = new Material
             {
-                ID = GetPropertyValue(propertyId) ?? DBNull.Value,
-                Name = item.DisplayName,
-                Volume = GetPropertyValue(propertyVolume) ?? DBNull.Value,
-                Area = GetPropertyValue(propertyArea) ?? DBNull.Value,
-                File = GetPropertyValue(propertyFile) ?? DBNull.Value,
-                Layer = GetPropertyValue(propertyLayer) ?? DBNull.Value
+                Name = name,
+                ID = id ?? DBNull.Value,
+                Volume = volume ?? DBNull.Value,
+                Area = area ?? DBNull.Value,
+                File = file ?? DBNull.Value,
+                Layer = layer ?? DBNull.Value
             };
 
             listMaterials.Add(material);
@@ -252,18 +329,12 @@ namespace test2.Ctr
                 conn = null;
                 btConnect.Enabled = true;
                 btBreakConnect.Enabled = false;
-                SetControlsEnabled(false);
+                cbDataGet.Enabled = false;
+                cbDBUpdate.Enabled = false;
+                cbModelUpdate.Enabled = false;
+                tbTableName.Enabled = false;
                 MessageBox.Show("数据库连接已断开！");
             }
-        }
-
-        private void SetControlsEnabled(bool isEnabled)
-        {
-            cbDataGet.Enabled = isEnabled;
-            cbModelUpdate.Enabled = isEnabled;
-            tbTableName.Enabled = isEnabled;
-            btConnect.Enabled = isEnabled && (conn == null || conn.State != ConnectionState.Open);
-            btBreakConnect.Enabled = isEnabled && (conn != null && conn.State == ConnectionState.Open);
         }
 
         #endregion
@@ -377,12 +448,14 @@ namespace test2.Ctr
         {
             string createTableQuery = $@"
             CREATE TABLE IF NOT EXISTS `{tableName}` (
-                `ID` VARCHAR(255) PRIMARY KEY,
+                `P_Id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                `ID` VARCHAR(255),
                 `Name` TEXT COLLATE utf8_general_ci,
                 `Volume` DECIMAL(18, 5),
                 `Area` DECIMAL(18, 5),
                 `File` TEXT COLLATE utf8_general_ci,
-                `Layer` TEXT COLLATE utf8_general_ci
+                `Layer` TEXT COLLATE utf8_general_ci,
+                INDEX `idx_ID` (`ID`)
             );";
 
             using (MySqlCommand cmd = new MySqlCommand(createTableQuery, conn))
