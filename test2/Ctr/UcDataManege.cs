@@ -526,13 +526,33 @@ namespace test2.Ctr
             return GetPropertyValue(cat.Properties.FindPropertyByDisplayName(prop));
         }
 
+        // 对楼栋字段进行数据清洗，只提取楼栋名称
         private string ExtractBuilding(object fileObj)
         {
             var fileStr = fileObj?.ToString();
             if (string.IsNullOrEmpty(fileStr)) return null;
+
+            // 去路径
+            int lastSlash = Math.Max(fileStr.LastIndexOf('/'), fileStr.LastIndexOf('\\'));
+            if (lastSlash >= 0)
+                fileStr = fileStr.Substring(lastSlash + 1);
+
+            // 去扩展名
+            if (fileStr.EndsWith(".RVT", StringComparison.OrdinalIgnoreCase))
+                fileStr = fileStr.Substring(0, fileStr.Length - 4);
+
+            // 数字#开头，直接提取数字
             var match = System.Text.RegularExpressions.Regex.Match(fileStr, @"^(\d+)#");
-            return match.Success ? match.Groups[1].Value : null;
+            if (match.Success)
+                return match.Groups[1].Value;
+
+            // 去掉尾部ST/AR/AT/BT等，如果有
+            fileStr = System.Text.RegularExpressions.Regex.Replace(fileStr, "(ST|AR)$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            // 返回剩下的
+            return fileStr.Trim();
         }
+
         private string ExtractFloor(object layerObj)
         {
             var layerStr = layerObj?.ToString();
