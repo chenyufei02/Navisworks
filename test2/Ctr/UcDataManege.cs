@@ -13,7 +13,7 @@ using Autodesk.Navisworks.Api;
 using MySql.Data.MySqlClient;
 using static test2.Ctr.UcProperties;
 
-// 2025.06.24  01:48  v1.5稳定版
+// 2025.06.24  01:48  v1.5稳定版 
 // 新增：
 // 1.提高提取数据速度从5分钟级到10-20秒
 // 2.增加数据表名称输入框，用户可自定义要保存的数据表，数据表存在时，用户可选择一键清空该表并保存数据
