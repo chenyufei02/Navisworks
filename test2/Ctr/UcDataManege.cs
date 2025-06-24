@@ -21,6 +21,7 @@ using static test2.Ctr.UcProperties;
 // 4.采用MySqlBulkLoader配合临时表批量导入数据，保存数据到数据库速度从5分钟级到1秒
 // 5.增加自增主键P_ID，提升数据库查找速度
 // 6.增加提示信息，避免用户误操作
+// 7.2025.06.24 新增TimeLiner相关字段提取和MySQL入库
 
 namespace test2.Ctr
 {
@@ -244,6 +245,7 @@ namespace test2.Ctr
             }
         }
 
+        // 【核心修改】增加TimeLiner四字段的提取
         private Material TryGetMaterial(ModelItem item)
         {
             var categoryElement = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "元素");
@@ -267,6 +269,46 @@ namespace test2.Ctr
             var propertyId = categoryElement.Properties.FindPropertyByDisplayName("Id");
             var id = GetPropertyValue(propertyId);
 
+            // === 新增TimeLiner提取 start ===
+            var timelinerCategory = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "TimeLiner");
+            DateTime? plannedStart = null, plannedEnd = null, actualStart = null, actualEnd = null;
+            if (timelinerCategory != null)
+            {
+                foreach (var prop in timelinerCategory.Properties)
+                {
+                    string propName = prop.DisplayName;
+                    string rawValue = GetPropertyValue(prop)?.ToString();
+
+                    string timeStr = null;
+                    if (!string.IsNullOrEmpty(rawValue))
+                    {
+                        int idx = rawValue.IndexOf(':');
+                        if (idx >= 0 && rawValue.Length > idx + 1)
+                            timeStr = rawValue.Substring(idx + 1).Trim();
+                        else
+                            timeStr = rawValue.Trim();
+                    }
+
+                    if (propName.Contains("任务起点 (计划)"))
+                    {
+                        plannedStart = TryParseTime(timeStr);
+                    }
+                    else if (propName.Contains("任务终点 (计划)"))
+                    {
+                        plannedEnd = TryParseTime(timeStr);
+                    }
+                    else if (propName.Contains("任务起点 (实际)"))
+                    {
+                        actualStart = TryParseTime(timeStr);
+                    }
+                    else if (propName.Contains("任务终点 (实际)"))
+                    {
+                        actualEnd = TryParseTime(timeStr);
+                    }
+                }
+            }
+            // === 新增TimeLiner提取 end ===
+
             return new Material
             {
                 Name = name,
@@ -274,8 +316,20 @@ namespace test2.Ctr
                 Volume = volume,
                 Area = area,
                 File = file,
-                Layer = layer
+                Layer = layer,
+                PlannedStart = plannedStart,
+                PlannedEnd = plannedEnd,
+                ActualStart = actualStart,
+                ActualEnd = actualEnd
             };
+        }
+
+        // 新增：辅助方法 时间字符串转DateTime?（解析失败返回null）
+        private DateTime? TryParseTime(string timeStr)
+        {
+            if (DateTime.TryParse(timeStr, out DateTime dt))
+                return dt;
+            return null;
         }
 
         private void UpdateProgress(int percentage, string message)
@@ -316,7 +370,7 @@ namespace test2.Ctr
         #endregion
     }
 
-    // 保留原始结构，Material和MySqlDataSaver都在这里
+    // Material类 增加TimeLiner字段
     public class Material
     {
         public object ID { get; set; }
@@ -325,6 +379,11 @@ namespace test2.Ctr
         public object Area { get; set; }
         public object File { get; set; }
         public object Layer { get; set; }
+        // 新增
+        public DateTime? PlannedStart { get; set; }
+        public DateTime? PlannedEnd { get; set; }
+        public DateTime? ActualStart { get; set; }
+        public DateTime? ActualEnd { get; set; }
     }
 
     public class MySqlDataSaver
@@ -360,10 +419,14 @@ namespace test2.Ctr
 
             try
             {
-                CreateTableIfNotExists(tableName);
-                TruncateTable(tableName);
+                if (CheckTableExists(tableName))
+                {
+                    DropTable(tableName); // 新增：彻底删除表
+                }
+                CreateTableIfNotExists(tableName); // 然后用新结构重建
 
-                // 用Columns只写6个业务字段，P_Id自动自增
+
+                // 写入全部业务字段
                 var bulkLoader = new MySqlBulkLoader(conn)
                 {
                     TableName = tableName,
@@ -373,9 +436,11 @@ namespace test2.Ctr
                     CharacterSet = "utf8",
                     NumberOfLinesToSkip = 0
                 };
-                bulkLoader.Columns.AddRange(new[] { "ID", "Name", "Volume", "Area", "File", "Layer" });
+                bulkLoader.Columns.AddRange(new[] {
+                    "ID", "Name", "Volume", "Area", "File", "Layer",
+                    "PlannedStart", "PlannedEnd", "ActualStart", "ActualEnd"
+                });
                 bulkLoader.Load();
-
             }
             catch (Exception ex)
             {
@@ -389,24 +454,33 @@ namespace test2.Ctr
             }
         }
 
+        // 新增：TimeLiner字段导出
         private string ConvertToCsv(List<Material> materials)
         {
             var sb = new StringBuilder();
             foreach (var material in materials)
             {
                 var values = new List<string>
-                {
-                    EscapeCsvField(material.ID),
-                    EscapeCsvField(material.Name),
-                    EscapeCsvField(material.Volume),
-                    EscapeCsvField(material.Area),
-                    EscapeCsvField(material.File),
-                    EscapeCsvField(material.Layer)
-                };
+        {
+            EscapeCsvField(material.ID),
+            EscapeCsvField(material.Name),
+            EscapeCsvField(material.Volume),
+            EscapeCsvField(material.Area),
+            EscapeCsvField(material.File),
+            EscapeCsvField(material.Layer),
+            // 下面四个字段，如果没有值，直接写 \N（不带引号！）
+            material.PlannedStart.HasValue ? material.PlannedStart.Value.ToString("yyyy-MM-dd HH:mm:ss") : @"\N",
+            material.PlannedEnd.HasValue ? material.PlannedEnd.Value.ToString("yyyy-MM-dd HH:mm:ss") : @"\N",
+            material.ActualStart.HasValue ? material.ActualStart.Value.ToString("yyyy-MM-dd HH:mm:ss") : @"\N",
+            material.ActualEnd.HasValue ? material.ActualEnd.Value.ToString("yyyy-MM-dd HH:mm:ss") : @"\N"
+        };
                 sb.AppendLine(string.Join(",", values));
             }
             return sb.ToString();
         }
+
+
+
 
         private string EscapeCsvField(object field)
         {
@@ -430,15 +504,17 @@ namespace test2.Ctr
             }
         }
 
-        private void TruncateTable(string tableName)
+        private void DropTable(string tableName)
         {
-            string query = $"TRUNCATE TABLE `{tableName}`";
+            string query = $"DROP TABLE IF EXISTS `{tableName}`";
             using (MySqlCommand cmd = new MySqlCommand(query, conn))
             {
                 cmd.ExecuteNonQuery();
             }
         }
 
+
+        // 【核心修改】增加TimeLiner四字段
         private void CreateTableIfNotExists(string tableName)
         {
             string createTableQuery = $@"
@@ -450,6 +526,10 @@ namespace test2.Ctr
                 `Area` DECIMAL(18, 5),
                 `File` TEXT COLLATE utf8_general_ci,
                 `Layer` TEXT COLLATE utf8_general_ci,
+                `PlannedStart` DATETIME NULL,
+                `PlannedEnd` DATETIME NULL,
+                `ActualStart` DATETIME NULL,
+                `ActualEnd` DATETIME NULL,
                 INDEX `idx_ID` (`ID`)
             );";
             using (MySqlCommand cmd = new MySqlCommand(createTableQuery, conn))
