@@ -46,12 +46,12 @@ namespace test2.Ctr
                     btUpdate.Enabled = true;
             }
 
-            if (cbPause.Checked) return;
+            if (cbPause.Checked || !cbUpdate.Checked) return;
             if (Autodesk.Navisworks.Api.Application.ActiveDocument == null) return;
             var activeDocument = Autodesk.Navisworks.Api.Application.ActiveDocument;
             foreach (var model in activeDocument.Models)
             {
-                // **修正**: 将不存在的 SourceFileName 属性更改为正确的 FileName 属性
+                // **修正**: 将不存在的 SourceFileName 属性更改为正确的 FileName 属性  ?? 错误修正
                 var currentInfo = new FileInfo(model.SourceFileName);
                 var lastInfo = ListInfos.FirstOrDefault(i => i.FullName == currentInfo.FullName);
 

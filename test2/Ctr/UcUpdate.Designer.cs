@@ -39,15 +39,15 @@ namespace test2.Ctr
             // 
             // tbLog
             // 
-            this.tbLog.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-            | System.Windows.Forms.AnchorStyles.Left)
+            this.tbLog.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.tbLog.Font = new System.Drawing.Font("宋体", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.tbLog.Location = new System.Drawing.Point(0, 189);
-            this.tbLog.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.tbLog.Location = new System.Drawing.Point(0, 246);
+            this.tbLog.Margin = new System.Windows.Forms.Padding(4);
             this.tbLog.Multiline = true;
             this.tbLog.Name = "tbLog";
-            this.tbLog.Size = new System.Drawing.Size(457, 423);
+            this.tbLog.Size = new System.Drawing.Size(457, 339);
             this.tbLog.TabIndex = 8;
             this.tbLog.Text = "正在监视模型...\r\n";
             // 
@@ -57,22 +57,21 @@ namespace test2.Ctr
             this.btClear.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.btClear.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btClear.Location = new System.Drawing.Point(0, 624);
-            this.btClear.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.btClear.Margin = new System.Windows.Forms.Padding(4);
             this.btClear.Name = "btClear";
             this.btClear.Size = new System.Drawing.Size(459, 70);
             this.btClear.TabIndex = 9;
             this.btClear.Text = "清除文本框";
             this.btClear.UseVisualStyleBackColor = false;
             this.btClear.MouseUp += new System.Windows.Forms.MouseEventHandler(this.btClear_MouseUp);
-
             // 
             // cbPause
             // 
             this.cbPause.Anchor = System.Windows.Forms.AnchorStyles.Top;
             this.cbPause.AutoSize = true;
             this.cbPause.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.cbPause.Location = new System.Drawing.Point(283, 105);
-            this.cbPause.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.cbPause.Location = new System.Drawing.Point(294, 105);
+            this.cbPause.Margin = new System.Windows.Forms.Padding(4);
             this.cbPause.Name = "cbPause";
             this.cbPause.Size = new System.Drawing.Size(84, 28);
             this.cbPause.TabIndex = 7;
@@ -85,7 +84,7 @@ namespace test2.Ctr
             this.cbUpdate.AutoSize = true;
             this.cbUpdate.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.cbUpdate.Location = new System.Drawing.Point(61, 105);
-            this.cbUpdate.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.cbUpdate.Margin = new System.Windows.Forms.Padding(4);
             this.cbUpdate.Name = "cbUpdate";
             this.cbUpdate.Size = new System.Drawing.Size(132, 28);
             this.cbUpdate.TabIndex = 6;
@@ -94,13 +93,12 @@ namespace test2.Ctr
             // 
             // btUpdate
             // 
-            this.btUpdate.AutoSize = true;
             this.btUpdate.Dock = System.Windows.Forms.DockStyle.Top;
             this.btUpdate.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btUpdate.Location = new System.Drawing.Point(0, 0);
-            this.btUpdate.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.btUpdate.Margin = new System.Windows.Forms.Padding(4);
             this.btUpdate.Name = "btUpdate";
-            this.btUpdate.Size = new System.Drawing.Size(459, 76);
+            this.btUpdate.Size = new System.Drawing.Size(459, 87);
             this.btUpdate.TabIndex = 5;
             this.btUpdate.Text = "手动检查更新";
             this.btUpdate.UseVisualStyleBackColor = true;
@@ -115,7 +113,7 @@ namespace test2.Ctr
             this.Controls.Add(this.cbPause);
             this.Controls.Add(this.cbUpdate);
             this.Controls.Add(this.btUpdate);
-            this.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.Margin = new System.Windows.Forms.Padding(4);
             this.Name = "UcUpdate";
             this.Size = new System.Drawing.Size(459, 694);
             this.ResumeLayout(false);

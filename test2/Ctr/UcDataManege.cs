@@ -13,14 +13,9 @@ using Autodesk.Navisworks.Api;
 using MySql.Data.MySqlClient;
 using static test2.Ctr.UcProperties;
 
-// 2025.06.25  v1.6 进度与模型分离版
+// 2025.06.25  v2.0.2 进度全提取版
 // 新增：
-// 1. 独立提取每栋楼每一层的进度数据到专用进度表，提取字段：Building、Floor、PlannedStart、PlannedEnd、ActualStart、ActualEnd
-// 2. 支持自定义进度数据表名，支持批量导入
-// 3. UI支持进度表名输入和提取进度数据专用复选框
-// 4. 进度条、按钮逻辑自适应模型和进度表两套流程
-// 5. 优化遍历逻辑，确保每栋每层只提取一次,避免重复提取数据 对99%不满足的数据快速跳过
-// 6. 逻辑及命名风格与原版完全一致
+// 1. 优化了数据清洗字段
 
 namespace test2.Ctr
 {
