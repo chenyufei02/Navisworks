@@ -48,7 +48,7 @@
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.tbDataManege.Location = new System.Drawing.Point(4, 212);
-            this.tbDataManege.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.tbDataManege.Margin = new System.Windows.Forms.Padding(4);
             this.tbDataManege.Multiline = true;
             this.tbDataManege.Name = "tbDataManege";
             this.tbDataManege.ReadOnly = true;
@@ -88,7 +88,7 @@
             this.btConnect.Dock = System.Windows.Forms.DockStyle.Top;
             this.btConnect.Font = new System.Drawing.Font("宋体", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btConnect.Location = new System.Drawing.Point(0, 0);
-            this.btConnect.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.btConnect.Margin = new System.Windows.Forms.Padding(4);
             this.btConnect.Name = "btConnect";
             this.btConnect.Size = new System.Drawing.Size(556, 108);
             this.btConnect.TabIndex = 21;
@@ -102,7 +102,7 @@
             this.btBreakConnect.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.btBreakConnect.Font = new System.Drawing.Font("宋体", 14.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.btBreakConnect.Location = new System.Drawing.Point(0, 785);
-            this.btBreakConnect.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.btBreakConnect.Margin = new System.Windows.Forms.Padding(4);
             this.btBreakConnect.Name = "btBreakConnect";
             this.btBreakConnect.Size = new System.Drawing.Size(556, 117);
             this.btBreakConnect.TabIndex = 22;
@@ -116,7 +116,7 @@
             this.cbDBUpdate.AutoSize = true;
             this.cbDBUpdate.Font = new System.Drawing.Font("宋体", 15F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.cbDBUpdate.Location = new System.Drawing.Point(273, 668);
-            this.cbDBUpdate.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.cbDBUpdate.Margin = new System.Windows.Forms.Padding(4);
             this.cbDBUpdate.Name = "cbDBUpdate";
             this.cbDBUpdate.Size = new System.Drawing.Size(249, 34);
             this.cbDBUpdate.TabIndex = 23;
@@ -127,6 +127,7 @@
             // lblTableName
             // 
             this.lblTableName.AutoSize = true;
+            this.lblTableName.BackColor = System.Drawing.SystemColors.ActiveCaption;
             this.lblTableName.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.lblTableName.Location = new System.Drawing.Point(4, 128);
             this.lblTableName.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
@@ -141,18 +142,18 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.tbTableName.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.tbTableName.Location = new System.Drawing.Point(194, 123);
-            this.tbTableName.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.tbTableName.Margin = new System.Windows.Forms.Padding(4);
             this.tbTableName.Name = "tbTableName";
             this.tbTableName.Size = new System.Drawing.Size(356, 35);
             this.tbTableName.TabIndex = 25;
-            this.tbTableName.Text = "Data8";
+            this.tbTableName.Text = "请输入模型表表名";
             // 
             // progressBar
             // 
             this.progressBar.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
             this.progressBar.Location = new System.Drawing.Point(9, 588);
-            this.progressBar.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.progressBar.Margin = new System.Windows.Forms.Padding(4);
             this.progressBar.Name = "progressBar";
             this.progressBar.Size = new System.Drawing.Size(432, 34);
             this.progressBar.TabIndex = 26;
@@ -173,6 +174,7 @@
             // lblProgressTableName
             // 
             this.lblProgressTableName.AutoSize = true;
+            this.lblProgressTableName.BackColor = System.Drawing.SystemColors.ActiveCaption;
             this.lblProgressTableName.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.lblProgressTableName.Location = new System.Drawing.Point(4, 170);
             this.lblProgressTableName.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
@@ -187,11 +189,11 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.tbProgressTableName.Font = new System.Drawing.Font("宋体", 12F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.tbProgressTableName.Location = new System.Drawing.Point(194, 165);
-            this.tbProgressTableName.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.tbProgressTableName.Margin = new System.Windows.Forms.Padding(4);
             this.tbProgressTableName.Name = "tbProgressTableName";
             this.tbProgressTableName.Size = new System.Drawing.Size(356, 35);
             this.tbProgressTableName.TabIndex = 29;
-            this.tbProgressTableName.Text = "BuildingProgress";
+            this.tbProgressTableName.Text = "请输入进度表表名";
             // 
             // UcDataManege
             // 
@@ -209,7 +211,7 @@
             this.Controls.Add(this.cbModelUpdate);
             this.Controls.Add(this.cbDataGet);
             this.Controls.Add(this.tbDataManege);
-            this.Margin = new System.Windows.Forms.Padding(4, 4, 4, 4);
+            this.Margin = new System.Windows.Forms.Padding(4);
             this.Name = "UcDataManege";
             this.Size = new System.Drawing.Size(556, 902);
             this.ResumeLayout(false);

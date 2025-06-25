@@ -359,6 +359,7 @@ namespace test2.Ctr
 
             // TimeLiner
             var timelinerCategory = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "TimeLiner");
+
             DateTime? plannedStart = null, plannedEnd = null, actualStart = null, actualEnd = null;
             if (timelinerCategory != null)
             {
@@ -553,13 +554,41 @@ namespace test2.Ctr
             return fileStr.Trim();
         }
 
+        // 对楼层字段进行数据清洗，提取标准和非标准楼层
         private string ExtractFloor(object layerObj)
         {
             var layerStr = layerObj?.ToString();
             if (string.IsNullOrEmpty(layerStr)) return null;
+
+            // 1. 处理标准层数（例如：15F, 16F等）
             var match = System.Text.RegularExpressions.Regex.Match(layerStr, @"(\d+)F");
-            return match.Success ? match.Groups[1].Value : null;
+            if (match.Success) return match.Groups[1].Value;
+
+            // 2. 处理特殊楼层名：屋面层、机房层、机房屋面层、楼梯屋面层等
+            if (layerStr.Contains("机房屋面"))
+                return "机房屋面层";
+            if (layerStr.Contains("楼梯屋面"))
+                return "楼梯屋面层";
+            if (layerStr.Contains("机房"))
+                return "机房层";
+            if (layerStr.Contains("屋面"))
+                return "屋面层";
+
+            // 3. 处理带有数字的楼层名（例如：S_104.3、其它类似格式）
+            var numberMatch = System.Text.RegularExpressions.Regex.Match(layerStr, @"(\S+)");
+            if (numberMatch.Success && !numberMatch.Value.Contains("="))
+                return "其他层" + numberMatch.Groups[1].Value; // 直接返回“其他层”+数字部分
+
+            // 4. 处理带有等号的层名（例如：=104.3）
+            var equalMatch = System.Text.RegularExpressions.Regex.Match(layerStr, @"=(\S+)");
+            if (equalMatch.Success)
+                return "其他层=" + equalMatch.Groups[1].Value; // 返回“其他层”+数字
+
+            // 5. 如果没有符合的规则，则直接返回原始层名
+            return layerStr; // 如果是无法预测的命名，直接返回层名
         }
+
+
         #endregion
 
         #region 其它方法...
