@@ -439,33 +439,56 @@ namespace test2.Ctr
 
         private Material TryGetMaterial(ModelItem item)
         {
-            var categoryElement = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "元素");
-            if (categoryElement == null) return null;
+            // 1. 跨所有同名 "元素" 分类，地毯式搜索“体积”和“面积”
+            var propertyVolume = item.PropertyCategories
+                .Where(c => c.DisplayName == "元素")
+                .SelectMany(c => c.Properties)
+                .FirstOrDefault(p => p.DisplayName == "体积");
 
-            var propertyVolume = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "体积");
             if (propertyVolume == null) return null;
 
-            var propertyArea = categoryElement.Properties.FirstOrDefault(c => c.DisplayName == "面积");
+            var propertyArea = item.PropertyCategories
+                .Where(c => c.DisplayName == "元素")
+                .SelectMany(c => c.Properties)
+                .FirstOrDefault(p => p.DisplayName == "面积");
+
             if (propertyArea == null) return null;
 
             var volume = GetPropertyValue(propertyVolume);
             var area = GetPropertyValue(propertyArea);
             var name = item.DisplayName;
 
-            var categoryItem = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "项目");
+            // 2. 跨所有同名 "项目" 分类，地毯式搜索“源文件”和“层”
+            var propertyFile = item.PropertyCategories
+                .Where(c => c.DisplayName == "项目")
+                .SelectMany(c => c.Properties)
+                .FirstOrDefault(p => p.DisplayName == "源文件");
+            var file = propertyFile != null ? GetPropertyValue(propertyFile) : null;
 
-            var file = (categoryItem != null) ? GetPropertyValue(categoryItem.Properties.FindPropertyByDisplayName("源文件")) : null;
-            var layer = (categoryItem != null) ? GetPropertyValue(categoryItem.Properties.FindPropertyByDisplayName("层")) : null;
+            var propertyLayer = item.PropertyCategories
+                .Where(c => c.DisplayName == "项目")
+                .SelectMany(c => c.Properties)
+                .FirstOrDefault(p => p.DisplayName == "层");
+            var layer = propertyLayer != null ? GetPropertyValue(propertyLayer) : null;
 
-            var propertyId = categoryElement.Properties.FindPropertyByDisplayName("Id");
-            var id = GetPropertyValue(propertyId);
+            // 3. 获取 ID
+            var propertyId = item.PropertyCategories
+                .Where(c => c.DisplayName == "元素")
+                .SelectMany(c => c.Properties)
+                .FirstOrDefault(p => p.DisplayName == "Id");
+            var id = propertyId != null ? GetPropertyValue(propertyId) : null;
 
-            // TimeLiner
-            var timelinerCategory = item.PropertyCategories.FirstOrDefault(c => c.DisplayName == "TimeLiner");
+            // 4. 获取 TimeLiner 数据
             DateTime? plannedStart = null, plannedEnd = null, actualStart = null, actualEnd = null;
-            if (timelinerCategory != null)
+
+            // TimeLiner通常只有一个，但为了严谨也用 SelectMany 展开查
+            var timeLinerProps = item.PropertyCategories
+                .Where(c => c.DisplayName == "TimeLiner")
+                .SelectMany(c => c.Properties).ToList();
+
+            if (timeLinerProps.Any())
             {
-                foreach (var prop in timelinerCategory.Properties)
+                foreach (var prop in timeLinerProps)
                 {
                     string propName = prop.DisplayName;
                     string rawValue = GetPropertyValue(prop)?.ToString();
@@ -533,6 +556,8 @@ namespace test2.Ctr
         #region 新增：进度数据独立提取
         private void ExtractBuildingProgressRecords()
         {
+            tbDataManege.AppendText("======= 警告：新代码已成功加载并运行 =======\r\n");
+
             var doc = Autodesk.Navisworks.Api.Application.ActiveDocument;
             var rootItems = doc.Models.Select(m => m.RootItem);
 
@@ -566,11 +591,98 @@ namespace test2.Ctr
                     continue;
                 }
 
+                // 老版代码、提取二十分钟
+                //// 3. 宽松正则匹配
+                //string building = ExtractBuilding(rawFile);
+                //string floor = ExtractFloor(rawLayer);
+
+                //// ================== 终极探针开始 ==================
+                //// 只要这个构件身上带有“层”属性，不管它叫什么名字，全部抓出来暴露在阳光下！
+                //bool hasLayer = false;
+                //foreach (var category in item.PropertyCategories)
+                //{
+                //    if (category.DisplayName == "项目" && category.Properties.FindPropertyByDisplayName("层") != null)
+                //    {
+                //        hasLayer = true;
+                //        break;
+                //    }
+                //}
+
+                //if (hasLayer || (item.DisplayName != null && item.DisplayName.Contains("1F(-0.100)")))
+                //{
+                //    string debugMsg = $"【终极捕捉】节点: [{item.DisplayName ?? "NULL"}]\r\n" +
+                //                      $" -> 遍历读到的 rawFile : [{GetProperty(item, "项目", "源文件")?.ToString() ?? "NULL"}]\r\n" +
+                //                      $" -> 遍历读到的 rawLayer: [{GetProperty(item, "项目", "层")?.ToString() ?? "NULL"}]\r\n" +
+                //                      $"--------------------------------------------------\r\n";
+                //    if (this.InvokeRequired) this.Invoke(new Action(() => tbDataManege.AppendText(debugMsg)));
+                //    else tbDataManege.AppendText(debugMsg);
+                //}
+                //// ================== 终极探针结束 ==================
+
+
+                //// 有效节点判断：必须同时具备“楼栋”和“楼层”信息
+                //if (!string.IsNullOrEmpty(building) && !string.IsNullOrEmpty(floor))
+                //{
+                //    string key = $"{building}-{floor}";
+
+                //    // 如果这个楼层还没提取过
+                //    if (!picked.Contains(key))
+                //    {
+                //        // ================= 核心优化：智能探针 =================
+                //        // 问题：TimeLiner 属性可能挂在当前节点(Group)，也可能挂在子节点(Geometry)
+                //        // 策略：先查自己，没有则查后代中的第一个有数据的节点
+
+                //        ModelItem targetItem = item;
+
+                //        // 检查自己有没有 TimeLiner
+                //        if (targetItem.PropertyCategories.FindCategoryByDisplayName("TimeLiner") == null)
+                //        {
+                //            // 自己没有，找后代中有 TimeLiner 的第一个（广度优先可能更准，但这里用First即可）
+                //            targetItem = item.Descendants.FirstOrDefault(d => d.PropertyCategories.FindCategoryByDisplayName("TimeLiner") != null);
+                //        }
+
+                //        // 如果找到了有效的载体节点（无论是自己还是子孙）
+                //        if (targetItem != null)
+                //        {
+                //            var timeRecord = GetTimeLinerData(targetItem);
+
+                //            // 只有当至少有一个时间有效才记录
+                //            if (timeRecord.HasValidData)
+                //            {
+                //                picked.Add(key);
+                //                progressRecords.Add(new ProgressRecord
+                //                {
+                //                    Building = building,
+                //                    Floor = floor,
+                //                    PlannedStart = timeRecord.PlannedStart,
+                //                    PlannedEnd = timeRecord.PlannedEnd,
+                //                    ActualStart = timeRecord.ActualStart,
+                //                    ActualEnd = timeRecord.ActualEnd
+                //                });
+                //                storedCount++;
+                //            }
+                //        }
+                //    }
+
+                //    // 4. 剪枝 (Pruning)：
+                //    // 既然已经到了“楼层”这一级（无论是否提取成功），都没必要再遍历其内部的成千上万个构件了
+                //    // 直接跳过该节点的所有子节点
+                //    continue;
+                //}
+
+
+                //// 5. 继续向下遍历（如果当前还不是楼层节点）
+                //if (item.Children.Any())
+                //{
+                //    foreach (var child in item.Children) stack.Push(child);
+                //}
+
                 // 3. 宽松正则匹配
                 string building = ExtractBuilding(rawFile);
                 string floor = ExtractFloor(rawLayer);
 
-                // 有效节点判断：必须同时具备“楼栋”和“楼层”信息
+                // ================ 【第一步：提取进度数据】 ================
+                // 有效节点判断：必须同时具备“楼栋”和“楼层”信息，才去提取数据
                 if (!string.IsNullOrEmpty(building) && !string.IsNullOrEmpty(floor))
                 {
                     string key = $"{building}-{floor}";
@@ -578,16 +690,11 @@ namespace test2.Ctr
                     // 如果这个楼层还没提取过
                     if (!picked.Contains(key))
                     {
-                        // ================= 核心优化：智能探针 =================
-                        // 问题：TimeLiner 属性可能挂在当前节点(Group)，也可能挂在子节点(Geometry)
-                        // 策略：先查自己，没有则查后代中的第一个有数据的节点
-
                         ModelItem targetItem = item;
 
-                        // 检查自己有没有 TimeLiner
+                        // 检查自己有没有 TimeLiner，没有就去底下的子节点里找
                         if (targetItem.PropertyCategories.FindCategoryByDisplayName("TimeLiner") == null)
                         {
-                            // 自己没有，找后代中有 TimeLiner 的第一个（广度优先可能更准，但这里用First即可）
                             targetItem = item.Descendants.FirstOrDefault(d => d.PropertyCategories.FindCategoryByDisplayName("TimeLiner") != null);
                         }
 
@@ -613,15 +720,23 @@ namespace test2.Ctr
                             }
                         }
                     }
-
-                    // 4. 剪枝 (Pruning)：
-                    // 既然已经到了“楼层”这一级（无论是否提取成功），都没必要再遍历其内部的成千上万个构件了
-                    // 直接跳过该节点的所有子节点
-                    continue;
                 }
 
+                // ================ 【第二步：超强力独立剪枝 (解决遍历十多分钟的元凶)】 ================
+                // 判断 1：只要 rawLayer 有值，说明它在 Navisworks 里被识别为一个“层”（比如“地库”、“1F”）。
+                // 判断 2：或者它身上带有“元素”属性，说明它已经是墙、柱、板等实体物理构件了，下面全是几何三角面。
+                // 只要符合以上任意一点，直接 continue 剪枝！绝对不再往下深究它的子节点！
+                // 关键修复：使用正则提取出的纯净 floor，彻底避开"元素属性内没有ID项"的干扰！
+                bool isFloorNode = !string.IsNullOrEmpty(floor);
+                bool isElement = item.PropertyCategories.FindCategoryByDisplayName("元素") != null;
 
-                // 5. 继续向下遍历（如果当前还不是楼层节点）
+                if (isFloorNode || isElement)
+                {
+                    continue; // 核心剪枝：一刀切断后续的几十万次无用遍历！
+                }
+
+                // ================ 【第三步：继续向下遍历】 ================
+                // 只有上面没被拦截的（比如总项目节点、楼栋分组节点），才允许把子节点压入栈继续找
                 if (item.Children.Any())
                 {
                     foreach (var child in item.Children) stack.Push(child);
@@ -629,6 +744,7 @@ namespace test2.Ctr
 
                 // 6. UI反馈：只更新计数，不计算百分比
                 if (processedCount % 200 == 0) // 频率稍微调高点，因为现在遍历速度很快
+                    
                 {
                     UpdateProgress(0, $"⚡ 极速扫描中... 已采集: {storedCount} 条 | 已扫描节点: {processedCount}");
                 }
