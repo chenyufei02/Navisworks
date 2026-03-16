@@ -344,8 +344,33 @@ namespace test2.Ctr
                 progressBar.Style = ProgressBarStyle.Marquee;
                 progressBar.MarqueeAnimationSpeed = 30;
 
+
+                // ---- 插入性能监控代码 ----
+                // 强制进行一次垃圾回收，确保内存基准干净
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                long memoryBefore = Process.GetCurrentProcess().WorkingSet64; // 获取当前占用内存
+                Stopwatch sw = new Stopwatch();
+                sw.Start();
                 // 3. 执行提取
                 ExtractBuildingProgressRecords();
+                sw.Stop();
+                long memoryAfter = Process.GetCurrentProcess().WorkingSet64;
+                long memoryUsedMB = (memoryAfter - memoryBefore) / (1024 * 1024); // 换算成 MB
+
+                string logMsg = $"[性能测试报告]\r\n" +
+                                $"算法模式: 剪枝探针算法\r\n" +
+                                $"扫描节点总数: {progressRecords.Count} (有效数据)\r\n" +
+                                $"总耗时: {sw.ElapsedMilliseconds} 毫秒\r\n" +
+                                $"内存占用增加: {memoryUsedMB} MB\r\n" +
+                                $"-----------------------------------\r\n";
+
+                // 把性能数据打印到你的界面文本框里
+                if (this.InvokeRequired) this.Invoke(new Action(() => tbDataManege.AppendText(logMsg)));
+                else tbDataManege.AppendText(logMsg);
+                // -------------------------
+
+
 
                 UpdateProgress(100, $"提取阶段完成，准备写入数据库...");
 
