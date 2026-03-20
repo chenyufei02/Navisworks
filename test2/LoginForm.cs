@@ -16,7 +16,7 @@ namespace test2
         public string LoggedInUserName { get; private set; } = "";
 
         // 数据库连接字符串
-        private string connStr = "server=localhost;port=3306;user id=root;password=123456;database=ximalu;";
+        private string connStr = "server=8.136.51.57;port=3306;user id=root;password=123456;database=ximalu;";
 
         public LoginForm()
         {

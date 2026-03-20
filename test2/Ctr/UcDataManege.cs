@@ -81,7 +81,7 @@ namespace test2.Ctr
                 try
                 {
                     // 连接数据库 (注意：这里直接复用你之前的连接字符串逻辑)
-                    string stringConnect = "server=localhost;port=3306;user id=root;password=123456;database=ximalu;Allow User Variables=True;AllowLoadLocalInfile=True;";
+                    string stringConnect = "server=8.136.51.57;port=3306;user id=root;password=123456;database=ximalu;Allow User Variables=True;AllowLoadLocalInfile=True;";
                     conn = new MySqlConnection(stringConnect);
                     conn.Open();
 
@@ -328,6 +328,8 @@ namespace test2.Ctr
 
             // === 修改点：直接锁定表名为 plan_progress ===
             string tableName = "plan_progress";
+            // 测试数据表
+            //string tableName = "plan_progress_test";
 
             // 2. 锁定 UI
             btLogin.Enabled = false;
@@ -359,7 +361,7 @@ namespace test2.Ctr
                 long memoryUsedMB = (memoryAfter - memoryBefore) / (1024 * 1024); // 换算成 MB
 
                 string logMsg = $"[性能测试报告]\r\n" +
-                                $"算法模式: 剪枝探针算法\r\n" +
+                                $"算法模式: 轻量化提取算法\r\n" +
                                 $"扫描节点总数: {progressRecords.Count} (有效数据)\r\n" +
                                 $"总耗时: {sw.ElapsedMilliseconds} 毫秒\r\n" +
                                 $"内存占用增加: {memoryUsedMB} MB\r\n" +
