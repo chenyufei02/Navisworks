@@ -282,7 +282,7 @@ namespace WindowsFormsApp1
         {
             if (cbConnect.Checked && cbConnect.Enabled)
             {
-                conn = new MySqlConnection("server=localhost;port=3306;user id=root;password=123456;database=ximalu;");
+                conn = new MySqlConnection(test2.DbConfig.DefaultConnection);
                 conn.Open();
                 btStartNavis.Enabled = true;
                 cbConnect.Enabled = false;

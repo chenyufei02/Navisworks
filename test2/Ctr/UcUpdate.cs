@@ -103,7 +103,7 @@ namespace test2.Ctr
         MySqlConnection conn;
         private void button1_MouseUp(object sender, MouseEventArgs e)
         {
-            conn = new MySqlConnection("server=localhost;port=3306;user id=root;password=123456;database=ximalu;");
+            conn = new MySqlConnection(DbConfig.DefaultConnection);
             conn.Open();
             MessageBox.Show("数据库连接成功！");
         }

@@ -157,6 +157,7 @@
     <Compile Include="Ctr\UcUpdate.Designer.cs">
       <DependentUpon>UcUpdate.cs</DependentUpon>
     </Compile>
+    <Compile Include="DbConfig.cs" />
     <Compile Include="LoginForm.cs">
       <SubType>Form</SubType>
     </Compile>

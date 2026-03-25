@@ -81,7 +81,7 @@ namespace test2.Ctr
                 try
                 {
                     // 连接数据库 (注意：这里直接复用你之前的连接字符串逻辑)
-                    string stringConnect = "server=8.136.51.57;port=3306;user id=root;password=123456;database=ximalu;Allow User Variables=True;AllowLoadLocalInfile=True;";
+                    string stringConnect = DbConfig.BulkConnection;
                     conn = new MySqlConnection(stringConnect);
                     conn.Open();
 
